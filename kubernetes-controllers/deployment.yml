@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webserver
+  namespace: homework
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      nodeSelector:
+        homework: "true"
+      volumes:
+      - name: workdir
+        emptyDir: {}
+      - name: nginx-conf
+        configMap:
+          name: nginx-conf
+      initContainers:
+        - name: init-container
+          image: busybox
+          command: ['/bin/sh', '-c', 'echo "<html><body><h1>hello world </h1></body></html>" > /init/index.html']
+          volumeMounts:
+          - name: workdir
+            mountPath: "/init"
+      containers:
+      - name: web-server
+        image: nginx
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: workdir
+          mountPath: /homework
+        - name: "nginx-conf"
+          mountPath: /etc/nginx/conf.d/webserver.conf
+          subPath: webserver.conf
+        lifecycle:
+          preStop:
+            exec:
+              command: ['/bin/sh', '-c', 'rm -f /homework/index.html']
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - 'test -f /homework/index.html'
+          initialDelaySeconds: 5
+          periodSeconds: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
